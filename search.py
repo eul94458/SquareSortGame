@@ -40,7 +40,7 @@ class Search:
         return (f"Search time = {self.timelog} s\n"
               f"Step        = {self.step}\n"
               f"Found       = {self.found}\n"
-              f"Result      = {self.path if len(self.path)<30 else len(self.path)}")
+              f"Path len    = {str(len(self.path)) + str(self.path) if len(self.path)<30 else len(self.path)}")
 
 
 class IDSearch(Search):
@@ -234,12 +234,12 @@ class HeuristicSearch(Search):
 
 class ForeseeSearch(Search):
     
-    def run(self, start_node=None, depth=0, cap=1_000_000, step=0, found=0, foresee_step=12):
+    def run(self, start_node=None, depth=0, cap=1_000_000, step=0, found=0, foresee_step=16):
         memory = set()
         memorise = memory.add
         end_node = self.end_node
         childs = self.child_nodes
-        path = [start_node or self.start_node]
+        self.path = path = [start_node or self.start_node]
         stack = MinHeap(start_node or self.start_node)
         t0 = tt()
         while not found and len(stack) and (-1<step<=cap or -1<depth<=cap) :
@@ -247,55 +247,55 @@ class ForeseeSearch(Search):
                 print(f"Step, Depth  = {step}, {depth}")
                 t0 = tt()
             step += 1
-            node = stack.popleft()
-            memorise(node)
-            if node == end_node:
-                found = 1
-                path.append(node)
+            try:
+                parent = stack.popleft()
+            except IndexError:
+                found = 0
                 break
-            
-            new_nodes = set(childs(node)) - memory
-            backtrack = {c:node for c in new_nodes}
-            working_memory = copy(memory) | new_nodes
+            memorise(parent)
+            if parent == end_node:
+                found = 1
+                path.append(parent)
+                break
+            new_nodes = set(childs(parent)) - memory
+            backtrack = {child:parent for child in new_nodes}
+            working_memory = memory | new_nodes
             count = 1
-            #print(f"new_nodes = {new_nodes}")
-            #print(f"updated backtrack : \n{backtrack}\n")
+            foreseeing = MinHeap()
+            foreseeing += new_nodes
             while (not found) and new_nodes and count < foresee_step:
                 all_new_childs = set()
                 for new_node in new_nodes:
-                    #print(f"new_node = {new_node}")
                     new_childs = set(childs(new_node)) - working_memory
                     working_memory |= new_childs
                     all_new_childs |= new_childs
-                    backtrack.update({c:new_node for c in new_childs})
+                    backtrack.update({child:new_node for child in new_childs})
                     if end_node in new_childs:
                         found = 1
                         break
                 new_nodes = all_new_childs
+                foreseeing += all_new_childs
                 count += 1
-            visions = MinHeap(*(working_memory - memory))
-            stack.h = copy(visions.h)
-            
-            destination = visions.popleft()
-            
-            #for row in backtrack.items():
-            #    print(row)
-            #print(f"{node} => {destination}")
-            backpath = deque([destination])
-            _from, _to = backtrack[destination], destination
-            #print(f"{_from} << {_to}")
-            while _from != node:
-                backpath.appendleft(_from)
-                _from, _to = backtrack[_from], _from
-                #print(f"{_from} << {_to}")
-            step += len(backpath)
-            path += list(backpath)
-            
-            if destination == end_node:
-                found = 1
+            # Walk to the node of lowest cost
+            if len(foreseeing):
+                destination = foreseeing.popleft()
+                if destination <= parent: 
+                    backpath = [destination]
+                    _from, _to = backtrack[destination], destination
+                    while _from != parent:
+                        # Add nodes in the middle back into the stack
+                        # Since we don't know if they will lead us to the end,
+                        # we haven't explore them yet.
+                        stack.append(_to)
+                        backpath.append(_from)
+                        _from, _to = backtrack[_from], _from
+                    backpath = backpath[::-1]   
+                    step += len(backpath)
+                    path += backpath
+            if found:
                 break
-                
-            depth += foresee_step
+            depth += count
+            
         del stack
         self.step, self.path, self.found = self.step+step, path, bool(found)
         return True

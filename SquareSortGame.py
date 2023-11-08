@@ -399,7 +399,7 @@ if __name__ == '__main__':
     print(title)
     done = False
     while not done:
-        instruc = input("What size? (integer) | Nauto | exit -> ").strip().lower()
+        instruc = input("What size? (integer) | [N]auto | exit -> ").strip().lower()
         if instruc == 'exit':
             break
         if instruc.endswith('auto'):
